@@ -1,0 +1,79 @@
+#!/home/software/Python-3.5.2/python
+
+import sys
+
+if len(sys.argv)<3:
+    print("Usage: "+sys.argv[0]+" config-file data-file")
+    exit()
+
+import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib import cm
+from matplotlib import rc
+from copy import copy,deepcopy
+import configparser
+
+rc('font',**{'family':'sans-serif','sans-serif':['Helvetica']})
+rc('text', usetex=True)
+
+fig, ax = plt.subplots()
+
+# configure axis and title
+
+config = configparser.ConfigParser()
+config.read( sys.argv[1])
+
+# configure X and Y axis labels and units
+title_x0 = config.get("axis-x0","title")
+unit_x0 = config.get("axis-x0","unit")
+title_y0 = config.get("axis-y0","title")
+unit_y0 = config.get("axis-y0","unit")
+
+ax.set_title( config.get("global","title"), fontsize=20)
+ax.set_xlabel( title_x0 +" ( " + unit_x0 + " )", fontsize=18)
+ax.set_ylabel( title_y0 +" ( " + unit_y0 + " )", fontsize=18)
+
+plt.rc('text',usetex=True)
+plt.rc('font',family='serif')
+
+# figure out range of axis and linear / log
+f = open( sys.argv[2],'r')
+l = f.readline().split()
+min_x = float( l[0])
+max_x = float( l[1])
+log_x = False
+if l[2]=='log':
+    log_x = True
+    ax.set_xscale('log')
+l = f.readline().split()
+min_y = float( l[0])
+max_y = float( l[1])
+log_y = False
+if l[2]=='log':
+    log_y = True
+    ax.set_yscale('log')
+f.close()
+
+
+data=np.loadtxt( str(sys.argv[2]), skiprows=2)
+if log_x:
+    x=np.logspace( min_x, max_x, len(data[0]))
+else:
+    x=np.linspace( min_x, max_x, len(data[0]))
+if log_y:
+    y=np.logspace( min_y, max_y, len(data[0]))
+else:
+    y=np.linspace( min_y, max_y, len(data[0]))
+
+X,Y=np.meshgrid(x,y)
+
+cax = plt.pcolormesh(X,Y,data)
+#cax = plt.contourf(X,Y,data)
+plt.colorbar(cax)
+
+plt.minorticks_on()
+#ax.grid(True, which="major")
+#ax.grid(True, which="minor")
+
+plt.show()
+

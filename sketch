@@ -1,0 +1,165 @@
+#!/home/software/Python-3.5.2/python
+
+import sys
+
+# check number of commandline arguments.
+# usage is lineplot config-file datafile0 datafile1 ...
+# minimum of 2 commandline arguments
+if len(sys.argv)<2:
+    print("Usage: " + sys.argv[0] + " [config-file.cfg] data0 data1 ...")
+    exit()
+
+import configparser
+import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib import rc
+
+# define function to get config parameter with default option.
+def ConfigGet( config, section, key, default=""):
+    if config.has_option( section, key):
+        return config.get( section, key);
+    else:
+        return default
+
+fig, ax = plt.subplots()
+axes = [ax]
+
+
+# read configuration file for plotting
+config = configparser.ConfigParser()
+section = []
+if ".cfg" in sys.argv[1] :
+    config.read( sys.argv[1] )
+    section = config.sections()
+else:
+    print("No .cfg file found. Assuming default settings for all data files.")
+
+
+# read global settings (title and font size)
+title = ConfigGet( config, "global", "title")
+fontsize = ConfigGet( config, "global", "fontsize", 18)
+ax.set_title( title, fontsize=fontsize)
+
+
+# read and set settings for X-axis (x-label, unit, font size, linear vs log)
+name = "axis-x0"
+title = ConfigGet( config, name, "title")
+unit = ConfigGet( config, name, "unit")
+fontsize = ConfigGet( config, name, "fontsize", 16)
+if title:
+    axes[0].set_xlabel( title + " ("+unit+")", fontsize=fontsize)
+
+if config.has_option( name, "logscale"):
+    axes[0].set_xscale('log')
+
+
+axes[0].grid(True, which="major")
+axes[0].grid(True, which="minor")
+
+
+# find out how many y-axis
+for i in range(0,3):   # can plot up to 6 different scales
+    name = 'axis-y%d' % i
+    if name not in section:
+        break
+    elif i>0:
+        axes.append( ax.twinx())
+        found_y = True
+
+for i in range(0,3):   # can plot up to 6 different scales
+    name = 'axis-y%d' % i
+    if name not in section:
+        break
+    else:
+        title = ConfigGet( config,  name, "title")
+        unit = ConfigGet( config,  name, "unit")
+        color = ConfigGet( config,  name, "color", "black")
+        fontsize=ConfigGet( config,  name, "fontsize", 16)
+        if title:
+            axes[i].set_ylabel( title + " ("+unit+")", fontsize=fontsize, color=color)
+        if config.has_option( name, "logscale"):
+            axes[i].set_yscale('log')
+
+
+# variables to store lines and labels for later use with plotting legends
+lg_lines = []
+lg_labels = []
+
+# iterate all curves listed in the config file, up to 100
+csection = []
+
+for k, element in enumerate(section):
+    if 'curve' in element:
+        csection.append( element)
+
+if len(csection) == 0:
+    for k in range(0, len(sys.argv)-1):
+        csection.append( "curve%d"%k )
+
+ncurve = len(csection)
+
+
+for cname in csection:
+    data_index = int( ConfigGet( config,  cname, "file", int(''.join(ele for ele in cname if ele.isdigit() ) ) ) ) + 2
+    if ".cfg" not in sys.argv[0]:
+        data_index -= 1
+    if data_index >= len(sys.argv):
+        break
+
+    # open the file and read data out
+    f = open( sys.argv[data_index],'r')
+    lines = f.readlines()
+    f.close()
+
+    # retrieve columns to plot and prepare variable
+    col_x = int( ConfigGet( config,  name, "x", 0) )
+    col_y = int( ConfigGet( config,  name, "y", 1) )
+        # by default will plot first column as x and second column as y
+    max_index = max( col_x, col_y)
+    x = []
+    y = []
+
+    # iterate over the file to plot
+    for line in lines:
+        if not line.startswith("#"):    # comment starts with '#'
+            w = line.split()
+            if len(w) > max_index:  # if number of column is shorter than max index, there is something wrong.
+                if w[col_x] != '-' and w[col_y]!= '-': # no-data is marked with '-'
+                    x.append( float(w[col_x]) )
+                    y.append( float(w[col_y]) )
+
+    # retrieve auxiliary parameters for aesthetics and set default parameter for curves.
+    linewidth = int( ConfigGet( config,  name, "linewidth", 2))
+    color = ConfigGet( config,  name, "color");
+    style = ConfigGet( config,  name, "style", "-")
+    y_ax = int(ConfigGet( config,  name, "y-axis", 0))
+        # by default use the first y-axis
+    if color:
+        ll, = axes[y_ax].plot( x, y, style, linewidth=linewidth, color = color)
+    else:
+        ll, = axes[y_ax].plot( x, y, style, linewidth=linewidth)
+        # which axis to use
+    lg_lines.append( ll)
+    leg = ConfigGet( config,  name, "legend", sys.argv[data_index])
+    lg_labels.append( leg )
+
+plt.minorticks_on()
+
+if len(axes)==3:
+    fig.canvas.draw()   # trigger ticks to be placed
+    # fig.subplots_adjust(right=0.75)
+    # find the right spacing between second y axis and third y axis.
+    offset = 0.5 * axes[-2].yaxis.get_text_widths(fig.canvas.get_renderer())[1]
+    offset += 1.4 * int(ConfigGet( config, "axis-y1","fontsize", 16))
+    axes[-1].spines['right'].set_position(('outward', offset))
+    axes[-1].set_frame_on(True)
+    axes[-1].patch.set_visible(False)
+
+loc = ConfigGet( config, "global","legend location", "upper right")
+plt.legend( lg_lines, lg_labels, loc=loc)
+
+plt.tight_layout()
+
+# plt.axes().set_aspect('equal', 'datalim')
+
+plt.show()
